@@ -135,17 +135,17 @@ std::vector<std::string> ConfigParser::tokenize(std::ifstream& file) {
                     } else if (line[start] == '}') {
                         brace_count--;
                         if (brace_count == 0 && inside_server) {
-                            // End of server block - validate before adding
+/*                             // End of server block - validate before adding
                             if (validateServerTokens(current_server_tokens)) {
-                                // Server is valid, add tokens to main vector
+                                // Server is valid, add tokens to main vector */
                                 for (size_t i = 0; i < current_server_tokens.size(); ++i) {
                                     tokens.push_back(current_server_tokens[i]);
                                 }
                                 processed_servers++;
                                 std::cout << "[DEBUG] Servidor " << processed_servers << " validado y agregado." << std::endl;
-                            } else {
+/*                             } else {
                                 std::cout << "[DEBUG] Servidor descartado por errores de validación." << std::endl;
-                            }
+                            } */
                             
                             inside_server = false;
                             current_server_tokens.clear();
@@ -200,7 +200,7 @@ void ConfigParser::parse(IConfig* parent, std::vector<std::string>& tokens, size
     static_cast<ConfigNode*>(parent)->addChild(node);
 }
 
-std::string ConfigParser::getDirectiveValue(const IConfig* node, const std::string& key, const std::string& defaultValue) 
+std::string ConfigParser::getDirectiveValue(const IConfig* node, const std::string& key, const std::string& defaultValue) const
 {
     if (!node) 
         return defaultValue;
@@ -455,3 +455,44 @@ bool ConfigParser::validateServerTokens(const std::vector<std::string>& serverTo
     std::cout << "[DEBUG] Validación exitosa para bloque servidor" << std::endl;
     return true;
 }
+
+////
+
+std::pair<int, std::string> ConfigParser::getRedirection(const IConfig* block) const {
+    if (!block) {
+        return std::make_pair(0, ""); // No hay bloque, no hay redirección
+    }
+
+    // 1. Obtener el nodo de configuración para la directiva "return"
+    const IConfig* returnNode = block->getChild("return");
+    if (!returnNode) {
+        return std::make_pair(0, ""); // No hay directiva "return"
+    }
+
+    // 2. Obtener la lista de valores (debería ser [código, url])
+    const std::vector<std::string>& values = returnNode->getValues();
+    if (values.size() < 2) {
+        return std::make_pair(0, ""); // Faltan argumentos (código o url)
+    }
+
+    // 3. Extraer el código y la URL
+    int code = 0;
+    const std::string& codeStr = values[0];
+    const std::string& url = values[1];
+
+    // Convertir el código de string a int
+    std::stringstream ss(codeStr);
+    ss >> code;
+    if (ss.fail()) {
+        return std::make_pair(0, ""); // El código no es un número válido
+    }
+
+    // 4. Validar que es un código de redirección HTTP
+    if ((code >= 301 && code <= 303) || code == 307 || code == 308) {
+        return std::make_pair(code, url); // Devolver el par (código, url) válido
+    }
+
+    return std::make_pair(0, ""); // El código no es de redirección
+}
+
+////

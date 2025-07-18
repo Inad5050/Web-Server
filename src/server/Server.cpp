@@ -250,6 +250,15 @@ Response Server::createResponse(ClientBuffer &additive_bff)
 	size_t serverIndex = findServerIndex(req);
 	req.setServerIndex(serverIndex);
 
+    // --- INICIO DE LA LÓGICA DE REDIRECCIÓN ---
+	std::cout << "[DEBUG][processRedirection] pre START" << std::endl;
+    Response redirectResponse;
+    if (processRedirection(req, redirectResponse)) 
+	{
+        return redirectResponse;
+    }
+    // --- FIN DE LA LÓGICA DE REDIRECCIÓN ---
+
 	if (COOKIES == true)
 		checkCookies(req);
 
@@ -337,3 +346,62 @@ Cookies Server::createCookie()
 
 	return (newCookie);
 }
+
+////
+namespace {
+    // Esta función auxiliar se mantiene igual
+    std::string getReasonForStatus(int code) {
+        switch (code) {
+            case 301: return "Moved Permanently";
+            case 302: return "Found";
+            case 303: return "See Other";
+            case 307: return "Temporary Redirect";
+            case 308: return "Permanent Redirect";
+            default: return "Redirect";
+        }
+    }
+}
+
+bool Server::processRedirection(const Request& req, Response& redirectResponse)
+{
+    std::cout << "[DEBUG][processRedirection] START" << std::endl;
+	
+	// 1. Obtener los bloques de configuración para la petición actual.
+    const IConfig* serverBlock = _cfg.getServerBlocks()[req.getServerIndex()];
+    const IConfig* locationBlock = _cfg.findLocationBlock(serverBlock, req.getPath());
+
+	std::cout << "[DEBUG][processRedirection] 1" << std::endl;
+    // 2. Comprobar si el bloque 'location' tiene una directiva 'return'.
+    std::pair<int, std::string> redirection = _cfg.getRedirection(locationBlock);
+
+	std::cout << "[DEBUG][processRedirection] 2" << std::endl;
+    // 3. Si no se encontró en 'location', comprobar en el bloque 'server' como fallback.
+    if (redirection.first == 0) {
+        redirection = _cfg.getRedirection(serverBlock);
+    }
+
+	std::cout << "[DEBUG][processRedirection] 3" << std::endl;
+    // 4. Si NO se encontró una regla de redirección, devolver false.
+    if (redirection.first == 0) {
+        return false;
+    }
+
+    // 5. Si se encontró, construir la respuesta de redirección.
+    std::cout << "[DEBUG][processRedirection] Redirection triggered: " 
+              << redirection.first << " -> " << redirection.second << std::endl;
+
+    Payload payload;
+    payload.status = redirection.first;
+    payload.reason = getReasonForStatus(redirection.first);
+    payload.body = "";
+    payload.keepAlive = true;
+
+    redirectResponse = _responseBuilder->build(payload);
+    redirectResponse.setHeader("Location", redirection.second);
+    redirectResponse.setHeader("Content-Length", "0");
+
+	std::cout << "[DEBUG][processRedirection] 4" << std::endl;
+    
+    return true; // Indicar que la redirección se ha procesado.
+}
+////

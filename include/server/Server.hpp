@@ -61,6 +61,10 @@ class Server
 		void		checkCookies(Request &req);
 		Cookies		createCookie();
 
+		////
+		bool processRedirection(const Request& req, Response& redirectResponse);
+		////
+
 	public:
 		static Server&	getInstance(ConfigParser& cfg, std::string cgiPath, const std::string& rootPath, std::string uploadPath, IResponseBuilder *builder);
         ~Server();
